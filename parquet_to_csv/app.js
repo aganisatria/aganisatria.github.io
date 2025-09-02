@@ -1,5 +1,5 @@
-document.addEventListener("DOMContentLoaded", async () => {
-    // Initialize the wasm module from the CDN
+// Buat fungsi utama yang async
+async function main() {
     await parquet_wasm.init();
 
     const fileInput = document.getElementById('parquet-file');
@@ -8,11 +8,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     const downloadLink = document.getElementById('download-link');
 
     convertBtn.addEventListener('click', () => {
+        // PENANDA 1: Untuk memeriksa apakah klik terdeteksi
+        console.log("Tombol 'Convert' diklik!");
+
         const file = fileInput.files[0];
+        
+        // PENANDA 2: Untuk memeriksa apakah file berhasil diambil
+        console.log("File yang dipilih:", file);
+
         if (!file) {
             alert("Please select a Parquet file first!");
             return;
         }
+        
+        // PENANDA 3: Untuk memeriksa sebelum file mulai dibaca
+        console.log("FileReader akan mulai membaca file...");
 
         const reader = new FileReader();
 
@@ -35,7 +45,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                 const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);
-
+                
                 downloadLink.href = url;
                 downloadLink.style.display = 'inline-block';
                 downloadLink.download = file.name.replace(/\.parquet$/i, '.csv');
@@ -53,22 +63,26 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         reader.readAsArrayBuffer(file);
     });
+}
 
-    function convertToCSV(objArray) {
-        if (objArray.length === 0) return "";
-        const headers = Object.keys(objArray[0]);
-        const headerRow = headers.map(escapeCsvCell).join(',');
-        const rows = objArray.map(obj => headers.map(header => escapeCsvCell(obj[header])).join(','));
-        return [headerRow, ...rows].join('\n');
-    }
+function convertToCSV(objArray) {
+    if (objArray.length === 0) return "";
+    const headers = Object.keys(objArray[0]);
+    const headerRow = headers.map(escapeCsvCell).join(',');
+    const rows = objArray.map(obj => headers.map(header => escapeCsvCell(obj[header])).join(','));
+    return [headerRow, ...rows].join('\n');
+}
 
-    function escapeCsvCell(cell) {
-        if (cell == null) return '';
-        let cellString = String(cell);
-        if (cellString.includes(',') || cellString.includes('"') || cellString.includes('\n')) {
-            cellString = cellString.replace(/"/g, '""');
-            return `"${cellString}"`;
-        }
-        return cellString;
+function escapeCsvCell(cell) {
+    if (cell == null) return '';
+    let cellString = String(cell);
+    if (cellString.includes(',') || cellString.includes('"') || cellString.includes('\n')) {
+        cellString = cellString.replace(/"/g, '""');
+        return `"${cellString}"`;
     }
-});
+    return cellString;
+}
+
+
+// Jalankan fungsi utama
+main();
