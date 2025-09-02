@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parquet to CSV Converter</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; max-width: 800px; margin: auto; line-height: 1.6; }
+        h1 { color: #333; }
+        #csv-output { background-color: #f4f4f4; border: 1px solid #ccc; padding: 10px; white-space: pre-wrap; word-wrap: break-word; max-height: 400px; overflow-y: auto; font-family: "Courier New", Courier, monospace; }
+        button { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
+        button:hover { background-color: #0056b3; }
+        #download-link { display: none; margin-top: 15px; background-color: #28a745; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px; }
+        #download-link:hover { background-color: #218838; }
+        input[type="file"] { margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<h1>Parquet to CSV Converter (in Browser)</h1>
+<p>Select a local <code>.parquet</code> file to convert it into CSV format right here in your browser. All processing is done locally; your data is never uploaded.</p>
+
+<input type="file" id="parquet-file" accept=".parquet">
+<br>
+<button id="convert-btn">Convert to CSV</button>
+
+<hr style="margin: 20px 0;">
+
+<h3>CSV Output:</h3>
+<pre id="csv-output">CSV will appear here...</pre>
+
+<a href="#" id="download-link" download="output.csv">Download CSV File</a>
+
+<script src="https://unpkg.com/parquet-wasm@0.5.0/esm/parquet.js"></script>
+
+<script src="app.js"></script>
+
+</body>
+</html>
