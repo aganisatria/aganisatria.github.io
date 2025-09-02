@@ -1,28 +1,25 @@
-// Buat fungsi utama yang async
+// Langkah 1: Import library parquet-wasm sebagai ES Module
+// URL ini diambil dari temuan Anda, yang merupakan cara yang benar.
+import parquet_wasm from 'https://cdn.jsdelivr.net/npm/parquet-wasm@0.6.1/+esm';
+
+// Buat fungsi utama yang async untuk menggunakan 'await'
 async function main() {
+    // Inisialisasi library (diperlukan untuk me-load file .wasm pendukungnya)
     await parquet_wasm.init();
 
+    // Ambil elemen-elemen dari halaman HTML
     const fileInput = document.getElementById('parquet-file');
     const convertBtn = document.getElementById('convert-btn');
     const csvOutput = document.getElementById('csv-output');
     const downloadLink = document.getElementById('download-link');
 
+    // Tambahkan event listener untuk tombol 'convert'
     convertBtn.addEventListener('click', () => {
-        // PENANDA 1: Untuk memeriksa apakah klik terdeteksi
-        console.log("Tombol 'Convert' diklik!");
-
         const file = fileInput.files[0];
-        
-        // PENANDA 2: Untuk memeriksa apakah file berhasil diambil
-        console.log("File yang dipilih:", file);
-
         if (!file) {
             alert("Please select a Parquet file first!");
             return;
         }
-        
-        // PENANDA 3: Untuk memeriksa sebelum file mulai dibaca
-        console.log("FileReader akan mulai membaca file...");
 
         const reader = new FileReader();
 
@@ -32,6 +29,8 @@ async function main() {
             try {
                 const arrayBuffer = event.target.result;
                 const uint8Array = new Uint8Array(arrayBuffer);
+                
+                // Gunakan library untuk membaca file Parquet
                 const arrowTable = parquet_wasm.readParquet(uint8Array);
                 const data = arrowTable.toArray().map(row => row.toJSON());
 
@@ -40,9 +39,11 @@ async function main() {
                     return;
                 }
 
+                // Ubah data menjadi string CSV
                 const csvString = convertToCSV(data);
                 csvOutput.textContent = csvString;
 
+                // Siapkan link untuk mengunduh file CSV
                 const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);
                 
@@ -65,6 +66,7 @@ async function main() {
     });
 }
 
+// Fungsi untuk mengubah array of objects menjadi string CSV
 function convertToCSV(objArray) {
     if (objArray.length === 0) return "";
     const headers = Object.keys(objArray[0]);
@@ -73,6 +75,7 @@ function convertToCSV(objArray) {
     return [headerRow, ...rows].join('\n');
 }
 
+// Fungsi untuk menangani karakter khusus dalam sel CSV (koma, kutip)
 function escapeCsvCell(cell) {
     if (cell == null) return '';
     let cellString = String(cell);
@@ -83,6 +86,5 @@ function escapeCsvCell(cell) {
     return cellString;
 }
 
-
-// Jalankan fungsi utama
+// Jalankan fungsi utama kita
 main();
