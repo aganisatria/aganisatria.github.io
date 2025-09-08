@@ -1,4 +1,4 @@
-import parquet_wasm from 'https://cdn.jsdelivr.net/npm/parquet-wasm@0.6.1/+esm';
+import { readParquet } from 'https://cdn.jsdelivr.net/npm/parquet-wasm@0.6.1/+esm';
 
 async function main() {
     const fileInput = document.getElementById('parquet-file');
@@ -22,7 +22,7 @@ async function main() {
                 const arrayBuffer = event.target.result;
                 const uint8Array = new Uint8Array(arrayBuffer);
                 
-                const arrowTable = parquet_wasm.readParquet(uint8Array);
+                const arrowTable = readParquet(uint8Array);
                 const data = arrowTable.toArray().map(row => row.toJSON());
 
                 if (data.length === 0) {
