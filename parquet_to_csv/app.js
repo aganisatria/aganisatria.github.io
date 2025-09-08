@@ -29,7 +29,7 @@ async function main() {
                 
                 const arrowTable = readParquet(uint8Array);
                 const data = [];
-                const numRows = arrowTable.numRows;
+                const numRows = arrowTable.length;
                 for (let i = 0; i < numRows; i++) {
                     data.push(arrowTable.get(i).toJSON());
                 }
