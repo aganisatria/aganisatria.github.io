@@ -145,9 +145,26 @@ async function main() {
 
 async function initDuckDB() {
     const logger = new duckdb.ConsoleLogger();
-    const worker = new Worker(new URL('https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-browser-eh.worker.js', import.meta.url).toString());
+    const bundle = await duckdb.selectBundle(duckdb.getJsDelivrBundles());
+
+    const workerURL = bundle.mainWorker;
+    if (!workerURL) {
+        throw new Error('Could not find main worker URL in bundle');
+    }
+
+    const workerResponse = await fetch(workerURL);
+    const workerScript = await workerResponse.text();
+
+    const blob = new Blob([workerScript], { type: 'application/javascript' });
+    const url = URL.createObjectURL(blob);
+
+    const worker = new Worker(url);
+
     const db = new duckdb.AsyncDuckDB(logger, worker);
-    await db.instantiate((await duckdb.selectBundle(duckdb.getJsDelivrBundles())).mainModule);
+    await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+
+    URL.revokeObjectURL(url);
+    
     return db;
 }
 
