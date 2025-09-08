@@ -1,7 +1,10 @@
 import init, { readParquet } from 'https://cdn.jsdelivr.net/npm/parquet-wasm@0.6.1/+esm';
 
 async function main() {
-    await init();
+    const wasmUrl = 'https://cdn.jsdelivr.net/npm/parquet-wasm@0.6.1/esm/parquet_wasm_bg.wasm';
+    await init(wasmUrl);
+
+    console.log("Parquet-WASM module initialized successfully.");
 
     const fileInput = document.getElementById('parquet-file');
     const convertBtn = document.getElementById('convert-btn');
