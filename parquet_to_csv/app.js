@@ -32,7 +32,7 @@ async function main() {
                 console.dir(arrowTable);
                 const data = [];
                 if (arrowTable.numBatches > 0) {
-                    const batch = arrowTable.getBatch(0);
+                    const batch = arrowTable.batches[0];
                     const numRows = batch.length;
                     for (let i = 0; i < numRows; i++) {
                         data.push(batch.get(i).toJSON());
