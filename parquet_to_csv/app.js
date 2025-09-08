@@ -1,6 +1,8 @@
-import { readParquet } from 'https://cdn.jsdelivr.net/npm/parquet-wasm@0.6.1/+esm';
+import { readParquet, init } from 'https://cdn.jsdelivr.net/npm/parquet-wasm@0.6.1/+esm';
 
 async function main() {
+    await init();
+    
     const fileInput = document.getElementById('parquet-file');
     const convertBtn = document.getElementById('convert-btn');
     const csvOutput = document.getElementById('csv-output');
