@@ -6,204 +6,108 @@
     <title>Advanced Parquet Explorer (Client-Side)</title>
     <style>
         :root {
-            --primary-color: #3b82f6;
-            --primary-hover: #2563eb;
-            --success-color: #22c55e;
-            --error-color: #ef4444;
-            --light-gray: #f3f4f6;
-            --medium-gray: #d1d5db;
-            --dark-gray: #1f2937; /* Darker for better contrast */
-            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
-            --mono-font-family: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", monospace;
+            --primary-color: #3b82f6; --primary-hover: #2563eb; --success-color: #22c55e;
+            --error-color: #ef4444; --light-gray: #f3f4f6; --medium-gray: #d1d5db;
+            --dark-gray: #1f2937; --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            --mono-font-family: "SF Mono", "Fira Code", "Roboto Mono", monospace;
         }
-
-        body {
-            font-family: var(--font-family);
-            background-color: var(--light-gray);
-            color: #374151;
-            margin: 0;
-            padding: 2rem;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-        }
-
-        .container {
-            width: 100%;
-            max-width: 1100px; /* Wider for table */
-            display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
-        }
-
-        .card {
-            background-color: white;
-            border-radius: 0.75rem;
-            padding: 1.5rem;
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-        }
-
+        body { font-family: var(--font-family); background-color: var(--light-gray); color: #374151; margin: 0; padding: 2rem; }
+        .container { width: 100%; max-width: 1200px; margin: auto; display: flex; flex-direction: column; gap: 1.5rem; }
+        .card { background-color: white; border-radius: 0.75rem; padding: 1.5rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
         header { text-align: center; }
         h1 { font-size: 2.25rem; font-weight: 700; color: black; margin-bottom: 0.5rem; }
-        header p { color: #6b7280; max-width: 60ch; margin: auto; }
-        
-        #drop-zone {
-            border: 2px dashed var(--medium-gray);
-            border-radius: 0.5rem;
-            padding: 2rem;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.2s ease-in-out;
-        }
+        header p { color: #6b7280; max-width: 75ch; margin: auto; }
+        .main-layout { display: grid; grid-template-columns: 300px 1fr; gap: 1.5rem; }
+        #file-management-panel { display: flex; flex-direction: column; gap: 1rem; }
+        #drop-zone { border: 2px dashed var(--medium-gray); border-radius: 0.5rem; padding: 1.5rem; text-align: center; cursor: pointer; transition: all 0.2s ease-in-out; }
         #drop-zone.dragover { border-color: var(--primary-color); background-color: #eff6ff; }
-        #drop-zone p { margin: 0; color: #6b7280; }
-        #file-name-display { margin-top: 1rem; font-weight: 500; color: var(--primary-color); }
-        #query-section, #results-section { display: none; }
-        
+        #file-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.75rem; }
+        .file-item { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center; font-size: 0.9rem; }
+        .file-item input { width: 100%; box-sizing: border-box; padding: 0.25rem 0.5rem; border: 1px solid var(--medium-gray); border-radius: 0.25rem; }
+        .file-item button { background: none; border: none; cursor: pointer; color: var(--error-color); font-size: 1.25rem; padding: 0; }
         label { display: block; margin-bottom: 0.5rem; font-weight: 600; }
-        textarea {
-            width: 100%;
-            box-sizing: border-box;
-            padding: 0.75rem;
-            border-radius: 0.5rem;
-            border: 1px solid var(--medium-gray);
-            font-family: var(--mono-font-family);
-            font-size: 0.9rem;
-            min-height: 100px;
-            resize: vertical;
-        }
-        
-        #controls { display: flex; justify-content: center; align-items: center; gap: 1rem; }
-        button {
-            background-color: var(--primary-color);
-            color: white;
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: 0.5rem;
-            cursor: pointer;
-            font-size: 1rem;
-            font-weight: 600;
-            transition: background-color 0.2s;
-        }
-        button:hover:not(:disabled) { background-color: var(--primary-hover); }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        #status-message {
-            text-align: center; font-weight: 500; min-height: 1.5rem;
-            display: flex; align-items: center; justify-content: center; gap: 0.5rem;
-        }
-        .status-error { color: var(--error-color); }
-        .status-success { color: var(--success-color); }
-
-        .loader {
-            width: 18px; height: 18px; border: 2px solid #374151;
-            border-bottom-color: transparent; border-radius: 50%;
-            display: none; animation: rotation 1s linear infinite;
-        }
+        textarea { width: 100%; box-sizing: border-box; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--medium-gray); font-family: var(--mono-font-family); min-height: 150px; resize: vertical; }
+        #run-query-btn { background-color: var(--primary-color); color: white; padding: 0.75rem 1.5rem; border: none; border-radius: 0.5rem; cursor: pointer; font-size: 1rem; font-weight: 600; }
+        #run-query-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        #status-message { font-weight: 500; min-height: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
+        .status-error { color: var(--error-color); } .status-success { color: var(--success-color); }
+        .loader { width: 18px; height: 18px; border: 2px solid #374151; border-bottom-color: transparent; border-radius: 50%; display: none; animation: rotation 1s linear infinite; }
         @keyframes rotation { 100% { transform: rotate(360deg); } }
-
-        /* --- New Schema & Table Styles --- */
-        #schema-output {
-            background-color: var(--light-gray);
-            color: var(--dark-gray);
-            padding: 1rem;
-            border-radius: 0.5rem;
-            white-space: pre;
-            overflow-x: auto;
-            font-family: var(--mono-font-family);
-            font-size: 0.85rem;
-        }
-
-        #table-container {
-            max-height: 500px;
-            overflow: auto;
-            border: 1px solid var(--medium-gray);
-            border-radius: 0.5rem;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.9rem;
-        }
-
-        th, td {
-            padding: 0.75rem 1rem;
-            text-align: left;
-            border-bottom: 1px solid var(--medium-gray);
-            white-space: nowrap;
-        }
-
-        thead th {
-            background-color: var(--light-gray);
-            font-weight: 600;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }
-
-        tbody tr:nth-child(even) {
-            background-color: #f9fafb;
-        }
-        /* --- End New Styles --- */
-
-        #download-link {
-            display: none; margin-top: 1rem; background-color: var(--success-color);
-            color: white; padding: 0.75rem 1.5rem; text-decoration: none;
-            border-radius: 0.5rem; font-weight: 600; text-align: center;
-        }
-        #download-link:hover { background-color: #16a34a; }
+        #results-section { display: none; }
+        #perf-stats { font-family: var(--mono-font-family); font-size: 0.9rem; background: var(--light-gray); padding: 0.5rem 1rem; border-radius: 0.5rem; }
+        #schema-output { background-color: var(--dark-gray); color: #e5e7eb; padding: 1rem; border-radius: 0.5rem; white-space: pre; overflow-x: auto; font-family: var(--mono-font-family); font-size: 0.85rem; }
+        #table-container { max-height: 60vh; overflow: auto; border: 1px solid var(--medium-gray); border-radius: 0.5rem; margin-top: 1rem; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(--medium-gray); white-space: nowrap; }
+        thead th { background-color: white; font-weight: 600; position: sticky; top: 0; z-index: 10; border-bottom: 2px solid var(--dark-gray); }
+        tbody tr:nth-child(even) { background-color: #f9fafb; }
+        td:first-child, th:first-child { background-color: var(--light-gray); text-align: right; color: #6b7280; }
+        #pagination-controls { margin-top: 1rem; display: flex; justify-content: space-between; align-items: center; }
+        #download-link { display: none; background-color: var(--success-color); color: white; padding: 0.5rem 1rem; text-decoration: none; border-radius: 0.5rem; font-weight: 600; text-align: center; }
     </style>
 </head>
 <body>
-
 <div class="container">
     <header>
         <h1>Parquet Explorer</h1>
-        <p>Select or drag-and-drop a local <code>.parquet</code> file, then run SQL queries against it directly in your browser. All processing is done locally; your data is never uploaded.</p>
+        <p>A client-side data tool. Upload multiple Parquet files, rename them, and run complex SQL queries (including JOINs) directly in your browser. Your data never leaves your computer.</p>
     </header>
 
-    <div class="card">
-        <label for="parquet-file">1. Select Parquet File</label>
-        <div id="drop-zone">
-            <p>Drag & drop file here, or click to select</p>
+    <div class="main-layout">
+        <div id="file-management-panel" class="card">
+            <h4>File Workspace</h4>
+            <div id="drop-zone">
+                <p>Drag & drop files here, or click to select</p>
+            </div>
+            <input type="file" id="parquet-file" accept=".parquet" hidden multiple>
+            <ul id="file-list"></ul>
         </div>
-        <input type="file" id="parquet-file" accept=".parquet" hidden>
-        <div id="file-name-display"></div>
+        <div id="query-panel" class="card">
+            <h4>SQL Query Editor</h4>
+            <textarea id="query-input" placeholder="SELECT * FROM 'your_file.parquet' LIMIT 100;"></textarea>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem;">
+                <div id="status-message">
+                    <div class="loader" id="loader"></div>
+                    <span id="status-text"></span>
+                </div>
+                <button id="run-query-btn" disabled>Run Query</button>
+            </div>
+        </div>
     </div>
     
-    <div id="query-section" class="card">
-        <label for="query-input">2. Write SQL Query</label>
-        <textarea id="query-input"></textarea>
-    </div>
-
-    <div id="controls">
-        <button id="run-query-btn" disabled>Run Query & Convert</button>
-    </div>
-
-    <div id="status-message">
-        <div class="loader" id="loader"></div>
-        <span id="status-text"></span>
-    </div>
-
     <div id="results-section" class="card">
+        <div id="perf-stats"></div>
         <h4>Schema (Data Types)</h4>
         <pre id="schema-output"></pre>
         
-        <h4 style="margin-top: 1.5rem;">Preview (first 50 rows)</h4>
+        <h4 style="margin-top: 1.5rem;">Query Result</h4>
         <div id="table-container">
             <table>
                 <thead id="table-header"></thead>
                 <tbody id="table-body"></tbody>
             </table>
         </div>
-        
-        <a href="#" id="download-link" download="query_result.csv">Download Full CSV</a>
-    </div>
 
+        <div id="pagination-controls">
+            <div>
+                <button id="prev-page-btn">Previous</button>
+                <span id="page-info"></span>
+                <button id="next-page-btn">Next</button>
+            </div>
+            <div>
+                <label for="rows-per-page" style="display:inline-block; margin:0 0.5rem 0 0;">Rows:</label>
+                <select id="rows-per-page">
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="250">250</option>
+                </select>
+            </div>
+        </div>
+
+        <a href="#" id="download-link" download="query_result.csv">Download Full Result as CSV</a>
+    </div>
 </div>
 
 <script type="module" src="app.js"></script>
-    
 </body>
 </html>
