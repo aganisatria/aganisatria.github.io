@@ -3,33 +3,234 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Parquet to CSV Converter</title>
+    <title>Advanced Parquet Explorer (Client-Side)</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; max-width: 800px; margin: auto; line-height: 1.6; }
-        h1 { color: #333; }
-        #csv-output { background-color: #f4f4f4; border: 1px solid #ccc; padding: 10px; white-space: pre-wrap; word-wrap: break-word; max-height: 400px; overflow-y: auto; font-family: "Courier New", Courier, monospace; }
-        button { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
-        button:hover { background-color: #0056b3; }
-        #download-link { display: none; margin-top: 15px; background-color: #28a745; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px; }
-        #download-link:hover { background-color: #218838; }
-        input[type="file"] { margin-bottom: 10px; }
+        :root {
+            --primary-color: #3b82f6;
+            --primary-hover: #2563eb;
+            --success-color: #22c55e;
+            --error-color: #ef4444;
+            --light-gray: #f3f4f6;
+            --medium-gray: #d1d5db;
+            --dark-gray: #374151;
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--light-gray);
+            color: var(--dark-gray);
+            margin: 0;
+            padding: 2rem;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .card {
+            background-color: white;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+
+        header {
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            color: black;
+            margin-bottom: 0.5rem;
+        }
+
+        header p {
+            color: #6b7280;
+            max-width: 60ch;
+            margin: auto;
+        }
+        
+        #drop-zone {
+            border: 2px dashed var(--medium-gray);
+            border-radius: 0.5rem;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+        }
+
+        #drop-zone.dragover {
+            border-color: var(--primary-color);
+            background-color: #eff6ff;
+        }
+
+        #drop-zone p {
+            margin: 0;
+            color: #6b7280;
+        }
+
+        #file-name-display {
+            margin-top: 1rem;
+            font-weight: 500;
+            color: var(--primary-color);
+        }
+
+        #query-section, #results-section {
+            display: none; /* Initially hidden */
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        textarea {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--medium-gray);
+            font-family: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", monospace;
+            font-size: 0.9rem;
+            min-height: 100px;
+            resize: vertical;
+        }
+        
+        #controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: background-color 0.2s;
+        }
+
+        button:hover:not(:disabled) {
+            background-color: var(--primary-hover);
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #status-message {
+            text-align: center;
+            font-weight: 500;
+            min-height: 1.5rem; /* Reserve space */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        
+        .status-error { color: var(--error-color); }
+        .status-success { color: var(--success-color); }
+
+        .loader {
+            width: 18px;
+            height: 18px;
+            border: 2px solid var(--dark-gray);
+            border-bottom-color: transparent;
+            border-radius: 50%;
+            display: none; /* Hidden by default */
+            animation: rotation 1s linear infinite;
+        }
+
+        @keyframes rotation {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        pre {
+            background-color: var(--dark-gray);
+            color: #e5e7eb;
+            border: 1px solid var(--medium-gray);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", monospace;
+            font-size: 0.85rem;
+        }
+        
+        #download-link {
+            display: none; /* Hidden by default */
+            margin-top: 1rem;
+            background-color: var(--success-color);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            text-decoration: none;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        #download-link:hover {
+            background-color: #16a34a;
+        }
     </style>
 </head>
 <body>
 
-<h1>Parquet to CSV Converter (in Browser)</h1>
-<p>Select a local <code>.parquet</code> file to convert it into CSV format right here in your browser. All processing is done locally; your data is never uploaded.</p>
+<div class="container">
+    <header>
+        <h1>Parquet Explorer</h1>
+        <p>Select or drag-and-drop a local <code>.parquet</code> file, then run SQL queries against it directly in your browser. All processing is done locally; your data is never uploaded.</p>
+    </header>
 
-<input type="file" id="parquet-file" accept=".parquet">
-<br>
-<button id="convert-btn">Convert to CSV</button>
+    <div class="card">
+        <label for="parquet-file">1. Select Parquet File</label>
+        <div id="drop-zone">
+            <p>Drag & drop file here, or click to select</p>
+        </div>
+        <input type="file" id="parquet-file" accept=".parquet" hidden>
+        <div id="file-name-display"></div>
+    </div>
+    
+    <div id="query-section" class="card">
+        <label for="query-input">2. Write SQL Query</label>
+        <textarea id="query-input"></textarea>
+    </div>
 
-<hr style="margin: 20px 0;">
+    <div id="controls">
+        <button id="run-query-btn" disabled>Run Query & Convert</button>
+    </div>
 
-<h3>CSV Output:</h3>
-<pre id="csv-output">CSV will appear here...</pre>
+    <div id="status-message">
+        <div class="loader" id="loader"></div>
+        <span id="status-text"></span>
+    </div>
 
-<a href="#" id="download-link" download="output.csv">Download CSV File</a>
+    <div id="results-section" class="card">
+        <h3>Preview (first 50 rows)</h3>
+        <pre id="csv-output"></pre>
+        <a href="#" id="download-link" download="query_result.csv">Download Full CSV</a>
+    </div>
+
+</div>
 
 <script type="module" src="app.js"></script>
     
