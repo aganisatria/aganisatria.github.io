@@ -31,9 +31,12 @@ async function main() {
                 console.log("Inspecting arrowTable object below:");
                 console.dir(arrowTable);
                 const data = [];
-                const numRows = arrowTable.length;
-                for (let i = 0; i < numRows; i++) {
-                    data.push(arrowTable.get(i).toJSON());
+                if (arrowTable.numBatches > 0) {
+                    const batch = arrowTable.getBatch(0);
+                    const numRows = batch.length;
+                    for (let i = 0; i < numRows; i++) {
+                        data.push(batch.get(i).toJSON());
+                    }
                 }
 
                 if (data.length === 0) {
