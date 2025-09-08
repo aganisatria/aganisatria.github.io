@@ -27,13 +27,10 @@ async function main() {
         rowsPerPageSelect: document.getElementById('rows-per-page'),
     };
 
-    const setStatus = (message, type = 'info') => {
-        ui.statusText.textContent = message;
-        ui.statusText.className = `status-${type}`;
-    };
-    const setLoading = (isLoading, element = ui.runQueryBtn) => {
+    const setStatus = (message, type = 'info') => { ui.statusText.textContent = message; ui.statusText.className = `status-${type}`; };
+    const setLoading = (isLoading, element) => {
         ui.loader.style.display = isLoading ? 'block' : 'none';
-        element.disabled = isLoading;
+        if (element) element.disabled = isLoading;
     };
 
     setStatus('Initializing Engine...');
@@ -58,7 +55,6 @@ async function main() {
                         setLoading(true, ui.runQueryBtn);
                         const uint8Array = new Uint8Array(e.target.result);
                         await db.registerFileBuffer(file.name, uint8Array);
-                        
                         UPLOADED_FILES.push({ originalName: file.name, alias: '' });
                         renderFileList(ui.fileList, db, connection, setStatus);
                         ui.runQueryBtn.disabled = false;
@@ -107,9 +103,7 @@ async function main() {
 
         try {
             for (const file of UPLOADED_FILES) {
-                if (file.alias) {
-                    await connection.query(`CREATE OR REPLACE VIEW '${file.alias}' AS SELECT * FROM '${file.originalName}';`);
-                }
+                if (file.alias) { await connection.query(`CREATE OR REPLACE VIEW '${file.alias}' AS SELECT * FROM '${file.originalName}';`); }
             }
 
             const query = ui.queryInput.value;
@@ -134,7 +128,6 @@ async function main() {
                 renderTable([], ui.tableHeader, ui.tableBody);
             }
             ui.resultsSection.style.display = 'block';
-
         } catch (err) {
             setStatus(err.message, 'error');
             console.error(err);
@@ -175,11 +168,9 @@ async function main() {
         setLoading(true, button);
         
         try {
-            await connection.query(`DROP TABLE IF EXISTS export_temp_table;`);
-            await connection.query(`CREATE TEMP TABLE export_temp_table AS ${LAST_SUCCESSFUL_QUERY};`);
-            await db.copyFileToBuffer(filename);
-            await connection.query(`COPY (SELECT * FROM export_temp_table) TO '${filename}'`);
-            
+            try { await db.dropFile(filename); } catch (e) {}
+
+            await connection.query(sql);
             const buffer = await db.copyFileToBuffer(filename);
             const blob = new Blob([buffer], { type: mimeType });
             
@@ -191,6 +182,7 @@ async function main() {
             document.body.removeChild(a);
             URL.revokeObjectURL(a.href);
             
+            await db.dropFile(filename);
             setStatus('Export complete!', 'success');
         } catch(err) {
             setStatus(`Export failed: ${err.message}`, 'error');
@@ -204,80 +196,51 @@ async function main() {
 function renderFileList(listElement, dbInstance, connInstance, setStatus) {
     listElement.innerHTML = '';
     UPLOADED_FILES.forEach((fileData, index) => {
-        const li = document.createElement('li');
-        li.className = 'file-item';
+        const li = document.createElement('li'); li.className = 'file-item';
         const textWrapper = document.createElement('div');
-        const originalNameEl = document.createElement('div');
-        originalNameEl.textContent = fileData.originalName;
-        originalNameEl.style.fontWeight = 'bold';
-        const aliasInput = document.createElement('input');
-        aliasInput.type = 'text';
-        aliasInput.placeholder = 'Enter alias...';
-        aliasInput.value = fileData.alias;
+        const originalNameEl = document.createElement('div'); originalNameEl.textContent = fileData.originalName; originalNameEl.style.fontWeight = 'bold';
+        const aliasInput = document.createElement('input'); aliasInput.type = 'text'; aliasInput.placeholder = 'Enter alias...'; aliasInput.value = fileData.alias;
         aliasInput.onchange = (e) => { fileData.alias = e.target.value.trim(); };
-        textWrapper.appendChild(originalNameEl);
-        textWrapper.appendChild(aliasInput);
-        const deleteBtn = document.createElement('button');
-        deleteBtn.innerHTML = '&times;';
+        textWrapper.appendChild(originalNameEl); textWrapper.appendChild(aliasInput);
+        const deleteBtn = document.createElement('button'); deleteBtn.innerHTML = '&times;';
         deleteBtn.onclick = async () => {
             try {
                 await dbInstance.dropFile(fileData.originalName);
-                if (fileData.alias) {
-                    await connInstance.query(`DROP VIEW IF EXISTS '${fileData.alias}';`);
-                }
+                if (fileData.alias) { await connInstance.query(`DROP VIEW IF EXISTS '${fileData.alias}';`); }
                 UPLOADED_FILES.splice(index, 1);
                 renderFileList(listElement, dbInstance, connInstance, setStatus);
                 setStatus(`Removed ${fileData.originalName}`, 'info');
-            } catch (err) {
-                setStatus(`Error removing file: ${err.message}`, 'error');
-                console.error(err);
-            }
+            } catch (err) { setStatus(`Error removing file: ${err.message}`, 'error'); console.error(err); }
         };
-        li.appendChild(textWrapper);
-        li.appendChild(deleteBtn);
-        listElement.appendChild(li);
+        li.appendChild(textWrapper); li.appendChild(deleteBtn); listElement.appendChild(li);
     });
 }
 
 function renderTable(data, headerEl, bodyEl) {
-    headerEl.innerHTML = ''; 
-    bodyEl.innerHTML = '';
+    headerEl.innerHTML = ''; bodyEl.innerHTML = '';
     const headers = data.length > 0 ? Object.keys(data[0]) : (FULL_QUERY_RESULT.length > 0 ? Object.keys(FULL_QUERY_RESULT[0]) : []);
     const headerRow = document.createElement('tr');
-    const thNum = document.createElement('th');
-    thNum.textContent = '#';
-    headerRow.appendChild(thNum);
+    const thNum = document.createElement('th'); thNum.textContent = '#'; headerRow.appendChild(thNum);
     headers.forEach(h => { const th = document.createElement('th'); th.textContent = h; headerRow.appendChild(th); });
     headerEl.appendChild(headerRow);
     if (data.length === 0) {
         if(FULL_QUERY_RESULT.length > 0) {
-             const tr = document.createElement('tr');
-             const td = document.createElement('td');
-             td.colSpan = headers.length + 1;
-             td.textContent = 'No data on this page.';
-             td.style.textAlign = 'center';
-             tr.appendChild(td);
-             bodyEl.appendChild(tr);
+             const tr = document.createElement('tr'); const td = document.createElement('td');
+             td.colSpan = headers.length + 1; td.textContent = 'No data on this page.'; td.style.textAlign = 'center';
+             tr.appendChild(td); bodyEl.appendChild(tr);
         }
         return;
     }
     const startRow = (PAGINATION_STATE.currentPage - 1) * PAGINATION_STATE.rowsPerPage;
     data.forEach((rowData, index) => {
         const tr = document.createElement('tr');
-        const tdNum = document.createElement('td');
-        tdNum.textContent = startRow + index + 1;
+        const tdNum = document.createElement('td'); tdNum.textContent = startRow + index + 1;
         tr.appendChild(tdNum);
-        headers.forEach(header => { 
-            const td = document.createElement('td'); 
-            td.textContent = rowData[header]; 
-            tr.appendChild(td); 
-        });
+        headers.forEach(header => { const td = document.createElement('td'); td.textContent = rowData[header]; tr.appendChild(td); });
         bodyEl.appendChild(tr);
     });
 }
 
-function renderSchema(schema, element) { 
-    element.textContent = schema.fields.map(f => `"${f.name}": ${String(f.type)}`).join('\n'); 
-}
+function renderSchema(schema, element) { element.textContent = schema.fields.map(f => `"${f.name}": ${String(f.type)}`).join('\n'); }
 
 main();
