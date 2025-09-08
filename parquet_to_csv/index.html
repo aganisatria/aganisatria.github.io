@@ -17,14 +17,21 @@
         header { text-align: center; }
         h1 { font-size: 2.25rem; font-weight: 700; color: black; margin-bottom: 0.5rem; }
         header p { color: #6b7280; max-width: 75ch; margin: auto; }
-        .main-layout { display: grid; grid-template-columns: 300px 1fr; gap: 1.5rem; }
+        .main-layout { display: grid; grid-template-columns: 350px 1fr; gap: 1.5rem; }
         #file-management-panel { display: flex; flex-direction: column; gap: 1rem; }
-        #drop-zone { border: 2px dashed var(--medium-gray); border-radius: 0.5rem; padding: 1.5rem; text-align: center; cursor: pointer; transition: all 0.2s ease-in-out; }
-        #drop-zone.dragover { border-color: var(--primary-color); background-color: #eff6ff; }
-        #file-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.75rem; }
-        .file-item { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center; font-size: 0.9rem; }
-        .file-item input { width: 100%; box-sizing: border-box; padding: 0.25rem 0.5rem; border: 1px solid var(--medium-gray); border-radius: 0.25rem; }
-        .file-item button { background: none; border: none; cursor: pointer; color: var(--error-color); font-size: 1.25rem; padding: 0; }
+        
+        /* New Virtual Table Styles */
+        .virtual-table { border: 1px solid var(--medium-gray); border-radius: 0.5rem; }
+        .virtual-table-header { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background-color: var(--light-gray); cursor: pointer; }
+        .virtual-table-header h5 { margin: 0; font-size: 1rem; }
+        .virtual-table-content { padding: 0.75rem; border-top: 1px solid var(--medium-gray); display: none; }
+        .virtual-table.open .virtual-table-content { display: block; }
+        .virtual-table-files { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.9rem; }
+        .virtual-table-files li { display: flex; justify-content: space-between; align-items: center; }
+        .virtual-table-files button { background: none; border: none; cursor: pointer; color: var(--error-color); font-size: 1.25rem; padding: 0; }
+        .add-file-btn { margin-top: 0.75rem; width: 100%; padding: 0.5rem; font-size: 0.8rem; background-color: #e5e7eb; color: var(--dark-gray); }
+        .add-file-btn:hover { background-color: var(--medium-gray); }
+
         label { display: block; margin-bottom: 0.5rem; font-weight: 600; }
         textarea { width: 100%; box-sizing: border-box; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--medium-gray); font-family: var(--mono-font-family); min-height: 150px; resize: vertical; }
         button { background-color: var(--primary-color); color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.5rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: background-color 0.2s; }
@@ -58,32 +65,33 @@
 <div class="container">
     <header>
         <h1>Parquet Explorer</h1>
-        <p>A client-side data tool. Upload multiple Parquet files, rename them, and run complex SQL queries (including JOINs and globbing like <code>'*.parquet'</code>) directly in your browser. Your data never leaves your computer.</p>
+        <p>A client-side data tool. Create virtual tables, upload multiple Parquet files, and run complex SQL queries (including JOINs) directly in your browser. Your data never leaves your computer.</p>
     </header>
+
     <div class="main-layout">
         <div id="file-management-panel" class="card">
-            <h4>File Workspace</h4>
-            <div id="drop-zone"><p>Drag & drop files here, or click to select</p></div>
+            <h4>Virtual Tables Workspace</h4>
+            <p style="font-size: 0.85rem; color: #6b7280; margin-top: -0.5rem;">Group related Parquet files into a single queryable table.</p>
+            <button id="create-table-btn" style="width: 100%;">+ Create New Virtual Table</button>
+            <div id="virtual-tables-container"></div>
             <input type="file" id="parquet-file" accept=".parquet" hidden multiple>
-            <ul id="file-list"></ul>
         </div>
         <div id="query-panel" class="card">
             <h4>SQL Query Editor</h4>
-            <textarea id="query-input" placeholder="-- Pro Tip: Use '*.parquet' to query all uploaded files at once!&#10;SELECT * FROM '*.parquet' LIMIT 100;"></textarea>
+            <textarea id="query-input" placeholder="-- After creating a table and adding files, you can query it by name.&#10;-- Example: SELECT * FROM Sales;"></textarea>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem;">
                 <div id="status-message"><div class="loader" id="loader"></div><span id="status-text"></span></div>
                 <button id="run-query-btn" disabled>Run Query</button>
             </div>
         </div>
     </div>
+    
     <div id="results-section" class="card">
         <div id="perf-stats"></div>
         <h4>Schema (Data Types)</h4>
         <pre id="schema-output"></pre>
         <h4 style="margin-top: 1.5rem;">Query Result Preview</h4>
-        <div id="table-container">
-            <table><thead id="table-header"></thead><tbody id="table-body"></tbody></table>
-        </div>
+        <div id="table-container"><table><thead id="table-header"></thead><tbody id="table-body"></tbody></table></div>
         <div id="pagination-controls">
              <div>
                 <button id="prev-page-btn">Previous</button>
