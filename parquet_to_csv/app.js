@@ -1,6 +1,6 @@
 import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/+esm';
 
-let VIRTUAL_TABLES = {};
+let VIRTUAL_TABLES = {}; // { tableName: [ { originalName: "f1.parquet", uniqueName: "uuid1.parquet" } ], ... }
 let FULL_QUERY_RESULT = [];
 let LAST_SUCCESSFUL_QUERY = '';
 let PAGINATION_STATE = { currentPage: 1, rowsPerPage: 50, totalPages: 1 };
@@ -36,6 +36,10 @@ async function main() {
     setStatus('Initializing Engine...');
     const db = await initDuckDB();
     const connection = await db.connect();
+    
+    await connection.query(`SET autoinstall_known_extensions=1;`);
+    await connection.query(`SET autoload_known_extensions=1;`);
+
     setStatus('Engine Ready.', 'success');
 
     const renderWorkspace = () => {
@@ -80,7 +84,7 @@ async function main() {
             for (const tableName in VIRTUAL_TABLES) {
                 const files = VIRTUAL_TABLES[tableName];
                 if (files.length > 0) {
-                    const unionQuery = files.map(f => `SELECT * FROM '${f.originalName}'`).join(' UNION ALL BY NAME ');
+                    const unionQuery = files.map(f => `SELECT * FROM '${f.uniqueName}'`).join(' UNION ALL BY NAME ');
                     await connection.query(`CREATE OR REPLACE VIEW "${tableName}" AS ${unionQuery};`);
                 } else {
                     await connection.query(`DROP VIEW IF EXISTS "${tableName}";`);
@@ -140,6 +144,13 @@ async function main() {
     ui.prevPageBtn.addEventListener('click', () => { if (PAGINATION_STATE.currentPage > 1) { PAGINATION_STATE.currentPage--; updateAndRenderPage(); } });
     ui.nextPageBtn.addEventListener('click', () => { if (PAGINATION_STATE.currentPage < PAGINATION_STATE.totalPages) { PAGINATION_STATE.currentPage++; updateAndRenderPage(); } });
     ui.rowsPerPageSelect.addEventListener('change', (e) => { PAGINATION_STATE.rowsPerPage = parseInt(e.target.value, 10); PAGINATION_STATE.currentPage = 1; updateAndRenderPage(); });
+    
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eName => ui.dropZone.addEventListener(eName, e => { e.preventDefault(); e.stopPropagation(); }));
+    ['dragenter', 'dragover'].forEach(eName => ui.dropZone.addEventListener(eName, () => ui.dropZone.classList.add('dragover')));
+    ['dragleave', 'drop'].forEach(eName => ui.dropZone.addEventListener(eName, () => ui.dropZone.classList.remove('dragover')));
+    ui.dropZone.addEventListener('drop', (e) => {
+        alert('Please drop files onto an "Add File(s)" button within a specific virtual table.');
+    });
 }
 
 async function initDuckDB() {
@@ -157,13 +168,14 @@ async function initDuckDB() {
 function handleFiles(files, tableName, db, setStatus, onComplete) {
     const filePromises = Array.from(files).map(file => {
         return new Promise((resolve, reject) => {
-            if (file.name.endsWith('.parquet') && !VIRTUAL_TABLES[tableName].some(f => f.originalName === file.name)) {
+            if (file.name.endsWith('.parquet')) {
                 const reader = new FileReader();
                 reader.onload = async (e) => {
                     try {
                         const uint8Array = new Uint8Array(e.target.result);
-                        await db.registerFileBuffer(file.name, uint8Array);
-                        VIRTUAL_TABLES[tableName].push({ originalName: file.name });
+                        const uniqueName = `file_${crypto.randomUUID()}.parquet`;
+                        await db.registerFileBuffer(uniqueName, uint8Array);
+                        VIRTUAL_TABLES[tableName].push({ originalName: file.name, uniqueName: uniqueName });
                         resolve();
                     } catch (err) { reject(err); }
                 };
@@ -204,7 +216,7 @@ function createVirtualTableElement(tableName, files, db, connection, renderWorks
         deleteBtn.innerHTML = '&times;';
         deleteBtn.onclick = async (e) => {
             e.stopPropagation();
-            await db.dropFile(file.originalName);
+            await db.dropFile(file.uniqueName);
             VIRTUAL_TABLES[tableName].splice(index, 1);
             renderWorkspace();
             setStatus(`Removed ${file.originalName}`, 'info');
@@ -251,22 +263,32 @@ function renderTable(data, headerEl, bodyEl) {
     });
 }
 
-function renderSchema(schema, element) { element.textContent = schema.fields.map(f => `"${f.name}": ${String(f.type)}`).join('\n'); }
-
-function mapRemainingUiElements(ui) {
-    ui.schemaOutput = document.getElementById('schema-output'); ui.tableHeader = document.getElementById('table-header');
-    ui.tableBody = document.getElementById('table-body'); ui.downloadSection = document.getElementById('download-section');
-    ui.downloadOptions = document.getElementById('download-options'); ui.loader = document.getElementById('loader');
-    ui.statusText = document.getElementById('status-text'); ui.perfStats = document.getElementById('perf-stats');
-    ui.prevPageBtn = document.getElementById('prev-page-btn'); ui.nextPageBtn = document.getElementById('next-page-btn');
-    ui.pageInfo = document.getElementById('page-info'); ui.rowsPerPageSelect = document.getElementById('rows-per-page');
+function renderSchema(schema, element) {
+    element.textContent = schema.fields.map(f => `"${f.name}": ${String(f.type)}`).join('\n');
 }
 
 async function handleDownload(format, compression, query, db, connection, setStatus, setLoading) {
     let sql = '';
     let filename = `query_result`;
     let mimeType = 'application/octet-stream';
-    if (format === 'parquet') { const compressionName = compression !== 'none' ? `_${compression}` : ''; filename += `${compressionName}.parquet`; const compressionSQL = compression !== 'none' ? `(COMPRESSION '${compression.toUpperCase()}')` : ''; sql = `COPY (${query}) TO '${filename}' ${compressionSQL};`; } else if (format === 'csv') { mimeType = 'text/csv'; filename += (compression === 'gzip') ? '.csv.gz' : '.csv'; const compressionSQL = (compression === 'gzip') ? ", COMPRESSION 'gzip'" : ''; sql = `COPY (${query}) TO '${filename}' (HEADER, DELIMITER ','${compressionSQL});`; } else if (format === 'json') { mimeType = 'application/json'; filename += (compression === 'gzip') ? '.json.gz' : '.json'; const compressionSQL = (compression === 'gzip') ? `, COMPRESSION 'gzip'` : ''; sql = `COPY (${query}) TO '${filename}' (FORMAT 'JSON'${compressionSQL});`; } else { return; }
+
+    if (format === 'parquet') {
+        const compressionName = compression !== 'none' ? `_${compression}` : '';
+        filename += `${compressionName}.parquet`;
+        const compressionSQL = compression !== 'none' ? `(COMPRESSION '${compression.toUpperCase()}')` : '';
+        sql = `COPY (${query}) TO '${filename}' ${compressionSQL};`;
+    } else if (format === 'csv') {
+        mimeType = 'text/csv';
+        filename += (compression === 'gzip') ? '.csv.gz' : '.csv';
+        const compressionSQL = (compression === 'gzip') ? ", COMPRESSION 'gzip'" : '';
+        sql = `COPY (${query}) TO '${filename}' (HEADER, DELIMITER ','${compressionSQL});`;
+    } else if (format === 'json') {
+        mimeType = 'application/json';
+        filename += (compression === 'gzip') ? '.json.gz' : '.json';
+        const compressionSQL = (compression === 'gzip') ? `, COMPRESSION 'gzip'` : '';
+        sql = `COPY (${query}) TO '${filename}' (FORMAT 'JSON'${compressionSQL});`;
+    } else { return; }
+
     setStatus(`Exporting to ${filename}...`);
     setLoading(true);
     try {
@@ -289,6 +311,23 @@ async function handleDownload(format, compression, query, db, connection, setSta
     } finally {
         setLoading(false);
     }
+}
+
+function mapRemainingUiElements(ui) {
+    ui.createTableBtn = document.getElementById('create-table-btn');
+    ui.virtualTablesContainer = document.getElementById('virtual-tables-container');
+    ui.schemaOutput = document.getElementById('schema-output');
+    ui.tableHeader = document.getElementById('table-header');
+    ui.tableBody = document.getElementById('table-body');
+    ui.downloadSection = document.getElementById('download-section');
+    ui.downloadOptions = document.getElementById('download-options');
+    ui.loader = document.getElementById('loader');
+    ui.statusText = document.getElementById('status-text');
+    ui.perfStats = document.getElementById('perf-stats');
+    ui.prevPageBtn = document.getElementById('prev-page-btn');
+    ui.nextPageBtn = document.getElementById('next-page-btn');
+    ui.pageInfo = document.getElementById('page-info');
+    ui.rowsPerPageSelect = document.getElementById('rows-per-page');
 }
 
 main();
