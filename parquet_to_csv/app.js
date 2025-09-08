@@ -39,7 +39,6 @@ async function main() {
     
     await connection.query(`SET autoinstall_known_extensions=1;`);
     await connection.query(`SET autoload_known_extensions=1;`);
-
     setStatus('Engine Ready.', 'success');
 
     const renderWorkspace = () => {
@@ -49,7 +48,8 @@ async function main() {
             const tableEl = createVirtualTableElement(tableName, tableData, db, connection, renderWorkspace, setStatus, ui.fileInput);
             ui.virtualTablesContainer.appendChild(tableEl);
         });
-        ui.runQueryBtn.disabled = Object.keys(VIRTUAL_TABLES).length === 0;
+        const totalFiles = Object.values(VIRTUAL_TABLES).reduce((acc, files) => acc + files.length, 0);
+        ui.runQueryBtn.disabled = totalFiles === 0;
     };
     
     ui.createTableBtn.addEventListener('click', () => {
@@ -90,18 +90,14 @@ async function main() {
                     await connection.query(`DROP VIEW IF EXISTS "${tableName}";`);
                 }
             }
-
             const query = ui.queryInput.value;
             const startTime = performance.now();
             const result = await connection.query(query);
             const endTime = performance.now();
             const duration = (endTime - startTime).toFixed(2);
-            
             LAST_SUCCESSFUL_QUERY = query;
             FULL_QUERY_RESULT = result.toArray().map(row => row.toJSON());
-            
             ui.perfStats.textContent = `Query took: ${duration} ms | Rows returned: ${FULL_QUERY_RESULT.length}`;
-            
             renderSchema(result.schema, ui.schemaOutput);
             if (FULL_QUERY_RESULT.length > 0) {
                 PAGINATION_STATE.currentPage = 1;
@@ -144,13 +140,6 @@ async function main() {
     ui.prevPageBtn.addEventListener('click', () => { if (PAGINATION_STATE.currentPage > 1) { PAGINATION_STATE.currentPage--; updateAndRenderPage(); } });
     ui.nextPageBtn.addEventListener('click', () => { if (PAGINATION_STATE.currentPage < PAGINATION_STATE.totalPages) { PAGINATION_STATE.currentPage++; updateAndRenderPage(); } });
     ui.rowsPerPageSelect.addEventListener('change', (e) => { PAGINATION_STATE.rowsPerPage = parseInt(e.target.value, 10); PAGINATION_STATE.currentPage = 1; updateAndRenderPage(); });
-    
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eName => ui.dropZone.addEventListener(eName, e => { e.preventDefault(); e.stopPropagation(); }));
-    ['dragenter', 'dragover'].forEach(eName => ui.dropZone.addEventListener(eName, () => ui.dropZone.classList.add('dragover')));
-    ['dragleave', 'drop'].forEach(eName => ui.dropZone.addEventListener(eName, () => ui.dropZone.classList.remove('dragover')));
-    ui.dropZone.addEventListener('drop', (e) => {
-        alert('Please drop files onto an "Add File(s)" button within a specific virtual table.');
-    });
 }
 
 async function initDuckDB() {
@@ -247,9 +236,11 @@ function renderTable(data, headerEl, bodyEl) {
     headers.forEach(h => { const th = document.createElement('th'); th.textContent = h; headerRow.appendChild(th); });
     headerEl.appendChild(headerRow);
     if (data.length === 0) {
-        if(FULL_QUERY_RESULT.length > 0) {
+        if(FULL_QUERY_RESULT.length >= 0) {
              const tr = document.createElement('tr'); const td = document.createElement('td');
-             td.colSpan = headers.length + 1; td.textContent = 'No data on this page.'; td.style.textAlign = 'center';
+             td.colSpan = headers.length + 1; 
+             td.textContent = FULL_QUERY_RESULT.length > 0 ? 'No data on this page.' : 'Query returned no rows.';
+             td.style.textAlign = 'center';
              tr.appendChild(td); bodyEl.appendChild(tr);
         }
         return;
@@ -263,9 +254,7 @@ function renderTable(data, headerEl, bodyEl) {
     });
 }
 
-function renderSchema(schema, element) {
-    element.textContent = schema.fields.map(f => `"${f.name}": ${String(f.type)}`).join('\n');
-}
+function renderSchema(schema, element) { element.textContent = schema.fields.map(f => `"${f.name}": ${String(f.type)}`).join('\n'); }
 
 async function handleDownload(format, compression, query, db, connection, setStatus, setLoading) {
     let sql = '';
@@ -280,7 +269,7 @@ async function handleDownload(format, compression, query, db, connection, setSta
     } else if (format === 'csv') {
         mimeType = 'text/csv';
         filename += (compression === 'gzip') ? '.csv.gz' : '.csv';
-        const compressionSQL = (compression === 'gzip') ? ", COMPRESSION 'gzip'" : '';
+        const compressionSQL = (compression === 'gzip') ? `, COMPRESSION 'gzip'` : '';
         sql = `COPY (${query}) TO '${filename}' (HEADER, DELIMITER ','${compressionSQL});`;
     } else if (format === 'json') {
         mimeType = 'application/json';
@@ -311,23 +300,6 @@ async function handleDownload(format, compression, query, db, connection, setSta
     } finally {
         setLoading(false);
     }
-}
-
-function mapRemainingUiElements(ui) {
-    ui.createTableBtn = document.getElementById('create-table-btn');
-    ui.virtualTablesContainer = document.getElementById('virtual-tables-container');
-    ui.schemaOutput = document.getElementById('schema-output');
-    ui.tableHeader = document.getElementById('table-header');
-    ui.tableBody = document.getElementById('table-body');
-    ui.downloadSection = document.getElementById('download-section');
-    ui.downloadOptions = document.getElementById('download-options');
-    ui.loader = document.getElementById('loader');
-    ui.statusText = document.getElementById('status-text');
-    ui.perfStats = document.getElementById('perf-stats');
-    ui.prevPageBtn = document.getElementById('prev-page-btn');
-    ui.nextPageBtn = document.getElementById('next-page-btn');
-    ui.pageInfo = document.getElementById('page-info');
-    ui.rowsPerPageSelect = document.getElementById('rows-per-page');
 }
 
 main();
