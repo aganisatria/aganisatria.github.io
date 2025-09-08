@@ -68,9 +68,18 @@ function renderFileList(listElement) {
 
         const deleteBtn = document.createElement('button');
         deleteBtn.innerHTML = '&times;';
-        deleteBtn.onclick = () => {
-            UPLOADED_FILES.splice(index, 1);
-            renderFileList(listElement);
+        deleteBtn.onclick = async () => {
+            try {
+                await dbInstance.dropFile(fileData.originalName);
+                if (fileData.alias) {
+                    await connInstance.query(`DROP VIEW IF EXISTS '${fileData.alias}';`);
+                }
+                UPLOADED_FILES.splice(index, 1);
+                renderFileList(listElement, dbInstance, connInstance);
+                console.log(`Removed ${fileData.originalName}`);
+            } catch (err) {
+                console.error(`Error removing file: ${err.message}`);
+            }
         };
         
         li.appendChild(textWrapper);
@@ -126,14 +135,22 @@ async function main() {
         for (const file of files) {
             if (file.name.endsWith('.parquet') && !UPLOADED_FILES.some(f => f.originalName === file.name)) {
                 const reader = new FileReader();
-                reader.onload = (e) => {
-                    UPLOADED_FILES.push({
-                        originalName: file.name,
-                        alias: '',
-                        data: new Uint8Array(e.target.result),
-                    });
-                    renderFileList(ui.fileList);
-                    ui.runQueryBtn.disabled = false;
+                reader.onload = async (e) => {
+                    try {
+                        setStatus(`Registering ${file.name}...`);
+                        const uint8Array = new Uint8Array(e.target.result);
+                        await db.registerFileBuffer(file.name, uint8Array);
+                        UPLOADED_FILES.push({
+                            originalName: file.name,
+                            alias: '',
+                        });
+                        renderFileList(ui.fileList, db, connection);
+                        ui.runQueryBtn.disabled = false;
+                        setStatus(`File ${file.name} ready.`, 'success');
+                    } catch(err) {
+                        setStatus(`Failed to register ${file.name}: ${err.message}`, 'error');
+                        console.error(err);
+                    }
                 };
                 reader.readAsArrayBuffer(file);
             }
@@ -186,7 +203,6 @@ async function main() {
 
         try {
             for (const file of UPLOADED_FILES) {
-                await db.registerFileBuffer(file.originalName, file.data);
                 if (file.alias) {
                     await connection.query(`CREATE OR REPLACE VIEW '${file.alias}' AS SELECT * FROM '${file.originalName}';`);
                 }
