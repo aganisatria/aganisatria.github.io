@@ -1,15 +1,27 @@
-import init, { readParquet } from 'https://cdn.jsdelivr.net/npm/parquet-wasm@0.6.1/+esm';
+import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/+esm';
 
 async function main() {
-    const wasmUrl = 'https://cdn.jsdelivr.net/npm/parquet-wasm@0.6.1/esm/parquet_wasm_bg.wasm';
-    await init(wasmUrl);
+    const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
+    const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
 
-    console.log("Parquet-WASM module initialized successfully.");
+    const worker_url = URL.createObjectURL(
+        new Blob([`importScripts("${bundle.mainWorker}");`], {type: 'application/javascript'})
+    );
+
+    const worker = new Worker(worker_url);
+    const logger = new duckdb.ConsoleLogger();
+    const db = new duckdb.AsyncDuckDB(logger, worker);
+    await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+    URL.revokeObjectURL(worker_url);
+
+    console.log("DuckDB-WASM module initialized successfully.");
 
     const fileInput = document.getElementById('parquet-file');
     const convertBtn = document.getElementById('convert-btn');
     const csvOutput = document.getElementById('csv-output');
     const downloadLink = document.getElementById('download-link');
+
+    const connection = await db.connect();
 
     convertBtn.addEventListener('click', () => {
         const file = fileInput.files[0];
@@ -23,21 +35,21 @@ async function main() {
         reader.onload = async function(event) {
             csvOutput.textContent = "Processing...";
             downloadLink.style.display = 'none';
+
             try {
                 const arrayBuffer = event.target.result;
                 const uint8Array = new Uint8Array(arrayBuffer);
+                const fileName = file.name;
+
+                // 2. Daftarkan file Parquet ke DuckDB
+                // Ini seperti "mengunggah" file ke dalam memori database virtual
+                await db.registerFileBuffer(fileName, uint8Array);
+
+                // 3. Jalankan query SQL untuk membaca SEMUA data dari file Parquet
+                const result = await connection.query(`SELECT * FROM "${fileName}";`);
                 
-                const arrowTable = readParquet(uint8Array);
-                console.log("Inspecting arrowTable object below:");
-                console.dir(arrowTable);
-                const data = [];
-                if (arrowTable.numBatches > 0) {
-                    const batch = arrowTable.chunks[0];
-                    const numRows = batch.length;
-                    for (let i = 0; i < numRows; i++) {
-                        data.push(batch.get(i).toJSON());
-                    }
-                }
+                // 4. Konversi hasilnya menjadi array of objects (API yang sangat jelas!)
+                const data = result.toArray().map(row => row.toJSON());
 
                 if (data.length === 0) {
                     csvOutput.textContent = "Parquet file is empty or could not be read.";
@@ -52,7 +64,7 @@ async function main() {
                 
                 downloadLink.href = url;
                 downloadLink.style.display = 'inline-block';
-                downloadLink.download = file.name.replace(/\.parquet$/i, '.csv');
+                downloadLink.download = fileName.replace(/\.parquet$/i, '.csv');
 
             } catch (error) {
                 console.error("Error processing Parquet file:", error);
@@ -69,6 +81,7 @@ async function main() {
     });
 }
 
+// Fungsi convertToCSV dan escapeCsvCell tidak berubah...
 function convertToCSV(objArray) {
     if (objArray.length === 0) return "";
     const headers = Object.keys(objArray[0]);
@@ -87,4 +100,5 @@ function escapeCsvCell(cell) {
     return cellString;
 }
 
+// Jalankan fungsi utama
 main();
