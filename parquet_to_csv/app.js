@@ -1,5 +1,57 @@
 import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/+esm';
 
+function convertToCSV(objArray) {
+    if (objArray.length === 0) return "";
+    const headers = Object.keys(objArray[0]);
+    const headerRow = headers.map(escapeCsvCell).join(',');
+    const rows = objArray.map(obj => headers.map(header => escapeCsvCell(obj[header])).join(','));
+    return [headerRow, ...rows].join('\n');
+}
+
+function escapeCsvCell(cell) {
+    if (cell == null) return '';
+    let cellString = String(cell);
+    if (cellString.includes(',') || cellString.includes('"') || cellString.includes('\n')) {
+        cellString = cellString.replace(/"/g, '""');
+        return `"${cellString}"`;
+    }
+    return cellString;
+}
+
+function renderSchema(schema, element) {
+    const fields = schema.fields;
+    const schemaText = fields.map(field => `"${field.name}": ${String(field.type)}`).join('\n');
+    element.textContent = schemaText;
+}
+
+function renderTable(data, headerElement, bodyElement, limit = 50) {
+    headerElement.innerHTML = '';
+    bodyElement.innerHTML = '';
+
+    if (data.length === 0) return;
+
+    const headers = Object.keys(data[0]);
+    const headerRow = document.createElement('tr');
+    headers.forEach(headerText => {
+        const th = document.createElement('th');
+        th.textContent = headerText;
+        headerRow.appendChild(th);
+    });
+    headerElement.appendChild(headerRow);
+
+    const previewData = data.slice(0, limit);
+    previewData.forEach(rowData => {
+        const row = document.createElement('tr');
+        headers.forEach(header => {
+            const td = document.createElement('td');
+            td.textContent = rowData[header];
+            row.appendChild(td);
+        });
+        bodyElement.appendChild(row);
+    });
+}
+
+
 async function main() {
     const fileInput = document.getElementById('parquet-file');
     const dropZone = document.getElementById('drop-zone');
@@ -8,7 +60,9 @@ async function main() {
     const queryInput = document.getElementById('query-input');
     const runQueryBtn = document.getElementById('run-query-btn');
     const resultsSection = document.getElementById('results-section');
-    const csvOutput = document.getElementById('csv-output');
+    const schemaOutput = document.getElementById('schema-output');
+    const tableHeader = document.getElementById('table-header');
+    const tableBody = document.getElementById('table-body');
     const downloadLink = document.getElementById('download-link');
     const loader = document.getElementById('loader');
     const statusText = document.getElementById('status-text');
@@ -19,7 +73,6 @@ async function main() {
         statusText.textContent = message;
         statusText.className = `status-${type}`;
     };
-
     const setLoading = (isLoading) => {
         loader.style.display = isLoading ? 'block' : 'none';
         runQueryBtn.disabled = isLoading;
@@ -60,22 +113,10 @@ async function main() {
 
     dropZone.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
-
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        dropZone.addEventListener(eventName, (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-        });
-    });
     
-    ['dragenter', 'dragover'].forEach(eventName => {
-        dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'));
-    });
-
-    ['dragleave', 'drop'].forEach(eventName => {
-        dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'));
-    });
-
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eName => dropZone.addEventListener(eName, e => { e.preventDefault(); e.stopPropagation(); }));
+    ['dragenter', 'dragover'].forEach(eName => dropZone.addEventListener(eName, () => dropZone.classList.add('dragover')));
+    ['dragleave', 'drop'].forEach(eName => dropZone.addEventListener(eName, () => dropZone.classList.remove('dragover')));
     dropZone.addEventListener('drop', (e) => handleFile(e.dataTransfer.files[0]));
 
     runQueryBtn.addEventListener('click', async () => {
@@ -89,78 +130,50 @@ async function main() {
         resultsSection.style.display = 'none';
         downloadLink.style.display = 'none';
 
-        try {
-            const reader = new FileReader();
-            reader.onload = async (event) => {
-                try {
-                    const uint8Array = new Uint8Array(event.target.result);
-                    const query = queryInput.value;
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            try {
+                const uint8Array = new Uint8Array(event.target.result);
+                const query = queryInput.value;
 
-                    await db.registerFileBuffer(selectedFile.name, uint8Array);
-                    const result = await connection.query(query);
-                    const data = result.toArray().map(row => row.toJSON());
+                await db.registerFileBuffer(selectedFile.name, uint8Array);
+                const result = await connection.query(query);
+                const data = result.toArray().map(row => row.toJSON());
 
-                    if (data.length === 0) {
-                        setStatus('Query returned no results.', 'info');
-                        csvOutput.textContent = 'No data to display.';
-                        resultsSection.style.display = 'block';
-                        setLoading(false);
-                        return;
-                    }
-
-                    const csvString = convertToCSV(data);
-                    
-                    const previewLines = csvString.split('\n').slice(0, 51);
-                    csvOutput.textContent = previewLines.join('\n');
-                    if (previewLines.length > 50) {
-                        csvOutput.textContent += '\n... (more rows in full download)';
-                    }
-                    
-                    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
-                    const url = URL.createObjectURL(blob);
-                    downloadLink.href = url;
-                    downloadLink.style.display = 'block';
-                    
-                    setStatus(`Success! Processed ${data.length} rows.`, 'success');
+                if (data.length === 0) {
+                    setStatus('Query returned no results.', 'info');
                     resultsSection.style.display = 'block';
-
-                } catch (err) {
-                    setStatus(err.message, 'error');
-                    console.error(err);
-                } finally {
+                    renderSchema(result.schema, schemaOutput);
+                    renderTable([], tableHeader, tableBody);
                     setLoading(false);
+                    return;
                 }
-            };
-            reader.onerror = () => {
-                setStatus('Failed to read the file.', 'error');
+                
+                renderSchema(result.schema, schemaOutput);
+                renderTable(data, tableHeader, tableBody, 50);
+
+                const csvString = convertToCSV(data);
+                const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                downloadLink.href = url;
+                downloadLink.style.display = 'block';
+                
+                setStatus(`Success! Showing preview of ${Math.min(data.length, 50)} of ${data.length} total rows.`, 'success');
+                resultsSection.style.display = 'block';
+
+            } catch (err) {
+                setStatus(err.message, 'error');
+                console.error(err);
+            } finally {
                 setLoading(false);
-            };
-            reader.readAsArrayBuffer(selectedFile);
-
-        } catch (error) {
-            setStatus(error.message, 'error');
-            console.error("Outer error:", error);
+            }
+        };
+        reader.onerror = () => {
+            setStatus('Failed to read the file.', 'error');
             setLoading(false);
-        }
+        };
+        reader.readAsArrayBuffer(selectedFile);
     });
-}
-
-function convertToCSV(objArray) {
-    if (objArray.length === 0) return "";
-    const headers = Object.keys(objArray[0]);
-    const headerRow = headers.map(escapeCsvCell).join(',');
-    const rows = objArray.map(obj => headers.map(header => escapeCsvCell(obj[header])).join(','));
-    return [headerRow, ...rows].join('\n');
-}
-
-function escapeCsvCell(cell) {
-    if (cell == null) return '';
-    let cellString = String(cell);
-    if (cellString.includes(',') || cellString.includes('"') || cellString.includes('\n')) {
-        cellString = cellString.replace(/"/g, '""');
-        return `"${cellString}"`;
-    }
-    return cellString;
 }
 
 main();
