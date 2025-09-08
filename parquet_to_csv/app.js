@@ -35,15 +35,13 @@ async function main() {
 
     setStatus('Initializing Engine...');
     const db = await initDuckDB();
+    await db.open({ path: ':memory:'});
     const connection = await db.connect();
     
-    setStatus('Configuring environment...');
-    const fs = db.getFs();
-    await fs.mkdir('/home');
-    await connection.query(`SET home_directory='/home';`); 
+    setStatus('Loading JSON extension...');
     await connection.query(`INSTALL json;`);
     await connection.query(`LOAD json;`);
-    
+
     setStatus('Engine Ready.', 'success');
 
     const renderWorkspace = () => {
@@ -61,8 +59,7 @@ async function main() {
         const tableName = prompt("Enter a name for the new virtual table (alphanumeric, no spaces):");
         if (tableName && /^[a-zA-Z0-9_]+$/.test(tableName)) {
             if (VIRTUAL_TABLES[tableName]) {
-                alert(`Table "${tableName}" already exists.`);
-                return;
+                alert(`Table "${tableName}" already exists.`); return;
             }
             VIRTUAL_TABLES[tableName] = [];
             renderWorkspace();
@@ -84,7 +81,6 @@ async function main() {
         setStatus('Preparing tables and running query...');
         ui.resultsSection.style.display = 'none';
         ui.downloadSection.style.display = 'none';
-
         try {
             for (const tableName in VIRTUAL_TABLES) {
                 const files = VIRTUAL_TABLES[tableName];
@@ -148,14 +144,10 @@ async function main() {
 }
 
 async function initDuckDB() {
-    const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
-    const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
-    const worker_url = URL.createObjectURL(new Blob([`importScripts("${bundle.mainWorker}");`], {type: 'application/javascript'}));
-    const worker = new Worker(worker_url);
     const logger = new duckdb.ConsoleLogger();
+    const worker = new Worker(new URL('https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-browser-eh.worker.js', import.meta.url).toString());
     const db = new duckdb.AsyncDuckDB(logger, worker);
-    await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
-    URL.revokeObjectURL(worker_url);
+    await db.instantiate((await duckdb.selectBundle(duckdb.getJsDelivrBundles())).mainModule);
     return db;
 }
 
@@ -175,21 +167,10 @@ function handleFiles(files, tableName, db, setStatus, onComplete) {
                 };
                 reader.onerror = reject;
                 reader.readAsArrayBuffer(file);
-            } else {
-                resolve();
-            }
+            } else { resolve(); }
         });
     });
-
-    Promise.all(filePromises)
-        .then(() => {
-            setStatus(`${files.length} file(s) processed for table ${tableName}.`, 'success');
-            onComplete();
-        })
-        .catch(err => {
-            setStatus(`Error processing files: ${err.message}`, 'error');
-            console.error(err);
-        });
+    Promise.all(filePromises).then(() => { setStatus(`${files.length} file(s) processed for table ${tableName}.`, 'success'); onComplete(); }).catch(err => { setStatus(`Error processing files: ${err.message}`, 'error'); console.error(err); });
 }
 
 function createVirtualTableElement(tableName, files, db, connection, renderWorkspace, setStatus, fileInputElement) {
