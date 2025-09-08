@@ -41,14 +41,10 @@ async function main() {
                 const uint8Array = new Uint8Array(arrayBuffer);
                 const fileName = file.name;
 
-                // 2. Daftarkan file Parquet ke DuckDB
-                // Ini seperti "mengunggah" file ke dalam memori database virtual
                 await db.registerFileBuffer(fileName, uint8Array);
 
-                // 3. Jalankan query SQL untuk membaca SEMUA data dari file Parquet
                 const result = await connection.query(`SELECT * FROM "${fileName}";`);
                 
-                // 4. Konversi hasilnya menjadi array of objects (API yang sangat jelas!)
                 const data = result.toArray().map(row => row.toJSON());
 
                 if (data.length === 0) {
@@ -81,7 +77,6 @@ async function main() {
     });
 }
 
-// Fungsi convertToCSV dan escapeCsvCell tidak berubah...
 function convertToCSV(objArray) {
     if (objArray.length === 0) return "";
     const headers = Object.keys(objArray[0]);
@@ -100,5 +95,4 @@ function escapeCsvCell(cell) {
     return cellString;
 }
 
-// Jalankan fungsi utama
 main();
