@@ -28,6 +28,8 @@ async function main() {
                 const uint8Array = new Uint8Array(arrayBuffer);
                 
                 const arrowTable = readParquet(uint8Array);
+                console.log("Inspecting arrowTable object below:");
+                console.dir(arrowTable);
                 const data = [];
                 const numRows = arrowTable.length;
                 for (let i = 0; i < numRows; i++) {
