@@ -28,7 +28,11 @@ async function main() {
                 const uint8Array = new Uint8Array(arrayBuffer);
                 
                 const arrowTable = readParquet(uint8Array);
-                const data = [...arrowTable].map(row => row.toJSON());
+                const data = [];
+                const numRows = arrowTable.numRows;
+                for (let i = 0; i < numRows; i++) {
+                    data.push(arrowTable.get(i).toJSON());
+                }
 
                 if (data.length === 0) {
                     csvOutput.textContent = "Parquet file is empty or could not be read.";
