@@ -37,8 +37,7 @@ async function main() {
     const db = await initDuckDB();
     const connection = await db.connect();
     
-    setStatus('Configuring environment...');
-    await connection.query(`SET home_directory='/';`); 
+    setStatus('Loading JSON extension...');
     await connection.query(`INSTALL json;`);
     await connection.query(`LOAD json;`);
     
