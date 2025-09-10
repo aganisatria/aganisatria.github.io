@@ -37,10 +37,8 @@ async function main() {
     const db = await initDuckDB();
     const connection = await db.connect();
     
-    setStatus('Loading JSON extension...');
-    await connection.query(`INSTALL json;`);
-    await connection.query(`LOAD json;`);
-    
+    await connection.query(`SET autoinstall_known_extensions=1;`);
+    await connection.query(`SET autoload_known_extensions=1;`);
     setStatus('Engine Ready.', 'success');
 
     const renderWorkspace = () => {
