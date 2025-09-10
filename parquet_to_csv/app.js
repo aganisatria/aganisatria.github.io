@@ -38,7 +38,7 @@ async function main() {
     const connection = await db.connect();
     
     setStatus('Configuring environment...');
-    await connection.query(`SET home_directory='/home';`); 
+    await connection.query(`SET home_directory='/';`); 
     await connection.query(`INSTALL json;`);
     await connection.query(`LOAD json;`);
     
